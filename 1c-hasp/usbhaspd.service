@@ -1,0 +1,12 @@
+[Unit]
+Description=Эмулятор аппаратных ключей защиты HASP
+Requires=aksusbd.service
+After=aksusbd.service
+Before=docker.service
+
+[Service]
+Type=idle
+ExecStart=/usr/sbin/usbhasp /usr/local/hasp-keys/server_x64.json /usr/local/hasp-keys/50.json
+
+[Install]
+WantedBy=multi-user.target
