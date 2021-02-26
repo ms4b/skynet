@@ -1,0 +1,54 @@
+<config xmlns="http://v8.1c.ru/v8/tech-log">
+    <dump create="false"/>
+    <log location="/var/log/1c/zabbix/locks" history="1">
+        <event>
+            <eq property="name" value="tlock"/>
+        </event>
+        <event>
+            <eq property="name" value="ttimeout"/>
+        </event>
+        <event>
+            <eq property="name" value="tdeadlock"/>
+        </event>
+        <property name="p:processname"/>
+        <property name="t:connectid"/>
+        <property name="waitconnections"/>
+        <property name="deadlockconnectionintersections"/>
+        <property name="regions"/>
+        <property name="locks"/>
+        <property name="context"/>
+    </log>
+    <log location="/var/log/1c/zabbix/calls" history="1">
+        <event>
+            <eq property="name" value="call"/>
+            <ne property="context" value=""/>
+        </event>
+        <property name="p:processname"/>
+        <property name="context"/>
+        <property name="memorypeak"/>
+        <property name="cputime"/>
+        <property name="inbytes"/>
+        <property name="outbytes"/>
+    </log>
+    <log history="72" location="/var/log/1c">
+        <event>
+            <eq property="name" value="EXCP"/>
+        </event>
+        <event>
+            <eq property="name" value="EXCPCNTX"/>
+        </event>
+        <event>
+            <eq property="name" value="PROC"/>
+        </event>
+        <event>
+            <eq property="name" value="ADMIN"/>
+        </event>
+        <event>
+            <eq property="name" value="MEM"/>
+        </event>
+        <event>
+            <eq property="name" value="LEAKS"/>
+        </event>
+        <property name="all"/>
+    </log>
+</config>
