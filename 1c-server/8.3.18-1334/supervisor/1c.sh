@@ -4,7 +4,8 @@ set -e
 exec 2>&1
 
 # создание каталогов
-#MAIN_1C=/opt/1C/v8.3/x86_64
+#MAIN_1C=/opt/1cv8/x86_64/${VER_1C}
+#VER_1C=номер версии сервера 1С
 #HOME_1C=/home/usr1cv8
 #LOG_1C=/var/log/1c
 mkdir --parent ${MAIN_1C}/conf ${HOME_1C} ${LOG_1C}/zabbix/locks ${LOG_1C}/zabbix/calls ${LOG_1C}/zabbix/problem_log ${LOG_1C}/log
@@ -22,5 +23,5 @@ chmod --recursive 770 ${LOG_1C}
 /usr/sbin/aksusbd_x86_64
 
 # запуск агента кластера серверов 1с
-exec gosu usr1cv8 /opt/1C/v8.3/x86_64/ragent -debug -http
+exec gosu usr1cv8 ${MAIN_1C}/ragent -debug -http
 
