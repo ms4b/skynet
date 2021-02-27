@@ -2,6 +2,11 @@
 FROM httpd:2.4
 MAINTAINER ms4b
 
+# версия сервера 1С
+ENV VER_1C=8.3.18.1334
+# каталог настроек технологического журнала сервера 1С
+ENV MAIN_1C=/opt/1cv8/x86_64/${VER_1C}
+
 # для избежания ошибок установки
 ARG DEBIAN_FRONTEND=noninteractive
 # дистрибутив 1С
