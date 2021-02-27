@@ -1,0 +1,8 @@
+---
+
+- name: Настройка серверов stm
+  hosts: local
+  roles:
+    - app_1c
+  gather_facts:
+    false

@@ -1,0 +1,4 @@
+---
+
+dependencies:
+  - { role: app_1c }

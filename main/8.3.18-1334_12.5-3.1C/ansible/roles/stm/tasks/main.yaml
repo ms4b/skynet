@@ -1,0 +1,30 @@
+---
+
+- name: Индивидуальные настройки stm
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{item.mode}}"
+  with_items:
+    - { src: 'publications.conf' ,dest: '/var/volumes/apache/conf', mode: '0644'}
+    - { src: 'db' ,dest: '/var/volumes/apache/htdocs', mode: '0644'}
+  tags:
+    - deploy
+
+- name: Альтернативная конфигурация nginx
+  template:
+    src: templates/nginx.conf
+    dest: /var/volumes/nginx/conf/app.conf
+  when: (special_config_nginx is defined) and (special_config_nginx|bool == true)
+  tags:
+    - deploy
+
+- name: Альтернативная конфигурация ssl для nginx
+  template:
+    src: templates/ssl.conf
+    dest: /var/volumes/certbot/conf/options-ssl-nginx.conf
+  when: (special_config_nginx is defined) and (special_config_nginx|bool == true)
+  tags:
+    - deploy

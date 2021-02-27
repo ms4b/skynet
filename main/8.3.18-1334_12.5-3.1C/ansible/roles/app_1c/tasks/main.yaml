@@ -1,0 +1,233 @@
+---
+
+- name: Файлы конфигурации контейнеров
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{item.mode}}"
+  with_items:
+    - { src: '.env'               ,dest: '/home', mode: '0644'}
+    - { src: '.env_1c-server'     ,dest: '/home', mode: '0644'}
+    - { src: '.env_postgres'      ,dest: '/home', mode: '0644'}
+    - { src: '.env_pwd_1c'        ,dest: '/home', mode: '0644'}
+    - { src: '.env_pwd_pg'        ,dest: '/home', mode: '0644'}
+    - { src: '.env_pwd_pgadmin'   ,dest: '/home', mode: '0644'}
+    - { src: 'docker-compose.yml' ,dest: '/home', mode: '0644'}
+    - { src: 'start.sh'           ,dest: '/home', mode: '0744'}
+    - { src: 'stop.sh'            ,dest: '/home', mode: '0744'}
+    - { src: 'remove.sh'          ,dest: '/home', mode: '0744'}
+  tags:
+    - deploy
+
+- name: Группа пользователей postgres
+  group:
+    name: postgres
+    gid: 5432
+  tags:
+    - deploy
+
+- name: Пользователь postgres
+  user:
+    name: postgres
+    uid: 5432
+    group: postgres
+  tags:
+    - deploy
+
+- name: Группа пользователей grp1cv8
+  group:
+    name: grp1cv8
+    gid: 1540
+  tags:
+    - deploy
+
+- name: Пользователь usr1cv8
+  user:
+    name: usr1cv8
+    uid: 1540
+    group: grp1cv8
+  tags:
+    - deploy
+
+- name: Служебные каталоги
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{item.mode}}"
+  with_items:
+    - { path: '/var/volumes/1c-postgres'       ,mode: '0700', owner: 'postgres', group: 'postgres'}
+    - { path: '/var/volumes/1c-server/home'    ,mode: '0700', owner: 'usr1cv8', group: 'grp1cv8'}
+    - { path: '/var/volumes/1c-server/logs'    ,mode: '0770', owner: 'usr1cv8', group: 'grp1cv8'}
+    - { path: '/var/volumes/1c-server/zabbix'  ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/pgadmin'           ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/portainer'         ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/zabbix'            ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/1c-hasp'           ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/certbot/conf'      ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/certbot/www'       ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/certbot/logs'      ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/apache/conf'       ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/apache/htdocs'     ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/nginx/conf'        ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/backup'            ,mode: '0777', owner: 'root', group: 'root'}
+    - { path: '/var/volumes/openvpn'           ,mode: '0777', owner: 'root', group: 'root'}
+  tags:
+    - deploy
+
+- name: Конфигурация nginx
+  template:
+    src: templates/nginx.conf
+    dest: /var/volumes/nginx/conf/app.conf
+  when: (special_config_nginx is not defined) or (special_config_nginx|bool == false)
+  tags:
+    - deploy
+
+- name: Конфигурация ssl для nginx
+  template:
+    src: templates/ssl.conf
+    dest: /var/volumes/certbot/conf/options-ssl-nginx.conf
+  when: (special_config_nginx is not defined) or (special_config_nginx|bool == false)
+  tags:
+    - deploy
+
+- name: Возможность пересылки пакетов между сетевыми интерфейсами
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Перенаправление VPN-трафика
+  iptables:
+    chain: FORWARD
+    in_interface: tun+
+    jump: ACCEPT
+
+- name: Очистка docker
+  docker_prune:
+    containers: yes
+    images: yes
+    networks: yes
+    volumes: yes
+    builder_cache: yes
+  tags:
+    - start
+  vars:
+    - ansible_python_interpreter: /usr/bin/python3
+
+#- name: Получние docker-образов
+#  docker_image:
+#    name: "{{ item }}"
+#    source: pull
+#  with_items:
+#    - "ms4b/1c-hasp:{{ os_ver }}"
+#    - "ms4b/1c-server:{{ app_server_ver }}"
+#    - "ms4b/1c-postgres:{{ postgres_ver }}"
+#    - "ms4b/1c-apache:{{ app_server_ver }}"
+#    - "ms4b/nginx:{{ nginx_ver }}"
+#    - "ms4b/zabbix-agent:{{ zabbix_agent_ver }}"
+#    - "dpage/pgadmin4"
+#    - "portainer/portainer"
+#    - "certbot/certbot"
+#    - "kylemanna/openvpn"
+#  vars:
+#    - ansible_python_interpreter: /usr/bin/python3
+#  tags:
+#    - start
+
+- name: Получние/обновление docker-образов
+  shell: "docker pull {{ item }}"
+  with_items:
+    - "ms4b/1c-hasp:{{ os_ver }}"
+    - "ms4b/1c-server:{{ app_server_ver }}"
+    - "ms4b/1c-postgres:{{ postgres_ver }}"
+    - "ms4b/1c-apache:{{ app_server_ver }}"
+    - "ms4b/nginx:{{ nginx_ver }}"
+    - "ms4b/zabbix-agent:{{ zabbix_agent_ver }}"
+    - "dpage/pgadmin4"
+    - "portainer/portainer"
+    - "certbot/certbot"
+    - "kylemanna/openvpn"
+  tags:
+    - start
+
+- name: Ежедневное резервное копирование базы данных
+  cron:
+    name: "Daily backup at 1 AM"
+    hour: "1"
+    minute: "0"
+    user: root
+    job: 'echo "$(date) daily" >> /var/volumes/backup/backup.log && /usr/bin/docker exec 1c-postgres /backup.sh daily >> /var/volumes/backup/backup.log 2>&1'
+  tags:
+    - deploy
+
+- name: Еженедельное резервное копирование базы данных
+  cron:
+    name: "Weekly backup at 2 AM Sunday"
+    weekday: "sun" # воскресенье
+    hour: "2"
+    minute: "0"
+    user: root
+    job: 'echo "$(date) weekly" >> /var/volumes/backup/backup.log && /usr/bin/docker exec 1c-postgres /backup.sh weekly >> /var/volumes/backup/backup.log 2>&1'
+  tags:
+    - deploy
+
+- name: Ежемесячное резервное копирование базы данных
+  cron:
+    name: "Monthly backup at 3 AM Sunday"
+    day: "1" # первое число каждого месяца
+    hour: "3"
+    minute: "0"
+    user: root
+    job: 'echo "$(date) monthly" >> /var/volumes/backup/backup.log && /usr/bin/docker exec 1c-postgres /backup.sh monthly >> /var/volumes/backup/backup.log 2>&1'
+  tags:
+    - deploy
+
+- name: Ежегодное резервное копирование базы данных
+  cron:
+    name: "Yearly backup at 4 AM 1 January"
+    month: "1" # январь
+    day: "1" # первое число каждого месяца
+    hour: "4"
+    user: root
+    minute: "0"
+    job: 'echo "$(date) yearly" >> /var/volumes/backup/backup.log && /usr/bin/docker exec 1c-postgres /backup.sh yearly >> /var/volumes/backup/backup.log 2>&1'
+  tags:
+    - deploy
+
+#- name: Копиляция драйверов и эмулятора usbhasp
+#  docker_container:
+#    name:
+#    image: "ms4b/1c-hasp:{{ os_ver }}"
+#    auto_remove: yes
+#    detach: no
+#    volumes:
+#      - /lib/modules:/lib/modules:ro
+#      - /var/volumes/1c-hasp:/var/output:rw
+#  register: compilation_result
+#  tags:
+#    - start
+
+#- name: Процесс компиляции драйверов и эмулятора usbhasp
+#  debug: var=compilation_result.stdout_lines
+#  tags:
+#    - start
+
+#- name: Результат компиляции драйверов и эмулятора usbhasp
+#  shell:
+#    cmd: ls -l
+#    chdir: /var/volumes/1c-hasp
+#  tags:
+#    - test
+
+#- name: Запуск контейнеров
+#  command: /home/start.sh
+#  args:
+#    chdir: /home
+#  tags:
+#    - start

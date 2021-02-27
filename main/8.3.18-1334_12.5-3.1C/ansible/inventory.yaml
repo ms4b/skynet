@@ -1,0 +1,23 @@
+---
+
+all:
+  children:
+    lead_servers:
+      hosts:
+        main:
+          ansible_ssh_host: main.ms4b.ru
+    managed_servers:
+      children:
+        backuped_servers:
+          children:
+            stm_servers:
+              hosts:
+                stm:
+                  ansible_ssh_host: stm.ms4b.ru
+                stm2:
+                  ansible_ssh_host: stm2.ms4b.ru
+  vars:
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    ansible_port: 22
+    ansible_user: root
+    ansible_ssh_private_key_file: "/home/ansible/.ssh/id_rsa"

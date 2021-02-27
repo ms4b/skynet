@@ -1,0 +1,205 @@
+---
+
+#- name: Группа пользователей ansible
+#  group:
+#    name: ansible
+
+#- name: Пользователь ansible
+#  user:
+#    name: ansible
+#    group: ansible
+
+#  rem переносим приватный ключ для доступа к серверам
+#  scp -i hetzner/ssh/id_rsa hetzner/ssh/id_rsa root@main.ms4b.ru:/root/.ssh/
+#  rem после первого копирования не забыть скорректировать права доступа
+#  rem chmod 0600 id_rsa
+
+#  rem переносим разрешенные  /root/.ssh/authorized_keys в /home/ansible/.ssh
+#  rem меняем владельца файла - chown ansible:ansible authorized_keys
+#  rem после этого можем зайти на сервер под пользователем ansible - ssh -i hetzner/ssh/id_rsa ansible@main.ms4b.ru
+
+- name: Ежедневный сбор бэкапов
+  cron:
+    name: "Daily getting backups from {{ hostvars[item].ansible_ssh_host }} at 6:00 AM"
+    hour: "6"
+    minute: "0"
+    user: root
+    job: "/usr/bin/rsync --archive -e ssh --remove-source-files --quiet root@{{ hostvars[item].ansible_ssh_host }}:/var/volumes/backup/ /mnt/backup/{{ hostvars[item].ansible_ssh_host }}"
+  with_items: "{{ groups.backuped_servers }}"
+  tags:
+    - deploy
+
+- name: Ежедневное сокращение дневных бэкапов
+  cron:
+    name: "Daily shrink daily backups at 1:00 AM"
+    hour: "1"
+    minute: "0"
+    user: root
+    job: "/usr/bin/find /mnt/backup/*/daily/* -type d -mtime +{{ old_of_daily_backups }} -delete"
+  tags:
+    - deploy
+
+- name: Ежедневное сокращение недельных бэкапов
+  cron:
+    name: "Daily shrink weekly backups at 1:10 AM"
+    hour: "1"
+    minute: "10"
+    user: root
+    job: "/usr/bin/find /mnt/backup/*/weekly/* -type d -mtime +{{ old_of_weekly_backups }} -delete"
+  tags:
+    - deploy
+
+- name: Ежедневное сокращение месячных бэкапов
+  cron:
+    name: "Daily shrink monthly backups at 1:20 AM"
+    hour: "1"
+    minute: "20"
+    user: root
+    job: "/usr/bin/find /mnt/backup/*/monthly/* -type d -mtime +{{ old_of_monthly_backups }} -delete"
+  tags:
+    - deploy
+
+- name: Ежедневное сокращение годовых бэкапов
+  cron:
+    name: "Daily shrink yearly backups at 1:30 AM"
+    hour: "1"
+    minute: "30"
+    user: root
+    job: "/usr/bin/find /mnt/backup/*/yearly/* -type d -mtime +{{ old_of_yearly_backups }} -delete"
+  tags:
+    - deploy
+
+- name: Служебные каталоги
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{item.mode}}"
+  with_items:
+    - { path: '/var/volumes/openvpn'           ,mode: '0777', owner: 'root', group: 'root'}
+  tags:
+    - deploy
+
+- name: Очистка docker
+  docker_prune:
+    containers: yes
+    images: yes
+    networks: yes
+    volumes: yes
+    builder_cache: yes
+  tags:
+    - start
+  vars:
+    - ansible_python_interpreter: /usr/bin/python3
+
+- name: Получние docker-образов
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  with_items:
+    - "kylemanna/openvpn"
+  vars:
+    - ansible_python_interpreter: /usr/bin/python3
+  tags:
+    - start
+
+#- name: Получние/обновление docker-образов
+#  shell: "docker pull {{ item }}"
+#  with_items:
+#    - "kylemanna/openvpn"
+#  tags:
+#    - start
+
+- name: Файлы конфигурации контейнеров
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{item.mode}}"
+  with_items:
+    - { src: 'docker-compose.yml' ,dest: '/home/ansible', mode: '0644'}
+    - { src: 'start.sh'           ,dest: '/home/ansible', mode: '0744'}
+    - { src: 'stop.sh'            ,dest: '/home/ansible', mode: '0744'}
+  tags:
+    - deploy
+
+- name: Проверка существования файла подключение OpenVPN
+  stat:
+    path: /var/volumes/openvpn/main_ms4b_ru.ovpn
+  register: ovpn
+  tags:
+    - deploy
+
+- name: Получение списка файлов в каталоге OpenVPN
+  find:
+    path: /var/volumes/openvpn
+    hidden: true
+    file_type: any
+  changed_when: false
+  register: collected_fsitems
+  when: not ovpn.stat.exists
+  tags:
+    - deploy
+
+- name: Удаление всех файлов в каталоге OpenVPN
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ collected_fsitems.files }}"
+  when:
+    - collected_fsitems.matched|int != 0
+    - not ovpn.stat.exists
+  echo: no
+  tags:
+    - deploy
+
+- name: Инициализация конфигурации OpenVPN
+  shell: docker-compose run --rm openvpn ovpn_genconfig -u udp://main.ms4b.ru
+  args:
+    chdir: /home/ansible
+  when: not ovpn.stat.exists
+  tags:
+    - deploy
+
+- name: Инициализация шифрования OpenVPN (может занять несколько минут)
+  expect:
+    command: docker-compose run --rm openvpn ovpn_initpki
+    responses:
+      Enter New CA Key Passphrase: "wi64IbvR"
+      Re-Enter New CA Key Passphrase: "wi64IbvR"
+      Common Name: "main.ms4b.ru"
+      Enter pass phrase for /etc/openvpn/pki/private/ca.key: "wi64IbvR"
+    echo: yes
+    chdir: /home/ansible
+    timeout: 300
+  no_log: true
+  when: not ovpn.stat.exists
+  tags:
+    - deploy
+
+- name: Инициализация пользователя OpenVPN
+  expect:
+    command: docker-compose run --rm openvpn easyrsa build-client-full main_ms4b_ru
+    responses:
+      Enter PEM pass phrase: "tm7jaspx"
+      Verifying - Enter PEM pass phrase: "tm7jaspx"
+      Enter pass phrase for /etc/openvpn/pki/private/ca.key: "wi64IbvR"
+    echo: yes
+    chdir: /home/ansible
+    timeout: 60
+  no_log: true
+  when: not ovpn.stat.exists
+  tags:
+    - deploy
+
+- name: Публикация файла подключения OpenVPN
+  shell: docker-compose run --rm openvpn ovpn_getclient main_ms4b_ru > /var/volumes/openvpn/main_ms4b_ru.ovpn
+  args:
+    chdir: /home/ansible
+  when: not ovpn.stat.exists
+  tags:
+    - deploy
+
+#- name: Запуск контейнера OpenVPN

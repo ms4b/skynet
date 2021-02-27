@@ -1,0 +1,1 @@
+docker exec -ti ansible ansible-playbook /home/test.yaml --tags test

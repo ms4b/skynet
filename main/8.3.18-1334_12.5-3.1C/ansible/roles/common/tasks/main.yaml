@@ -1,0 +1,22 @@
+---
+
+- name: Вспомогательные пакеты
+  yum:
+    name: ['yum-utils', 'device-mapper-persistent-data', 'lvm2', 'epel-release', 'python3-pip', 'mc', 'htop', 'iperf3']
+    state: latest
+  tags:
+    - install
+
+- name: Пакет pexpect
+  pip:
+    name: pexpect
+    state: latest
+    executable: pip3
+  tags:
+    - install
+
+- name: Часовой пояс - Москва
+  timezone:
+    name: Europe/Moscow
+  tags:
+    - install

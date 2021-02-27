@@ -1,0 +1,8 @@
+---
+
+ansible_python_interpreter: /usr/bin/python2
+os_ver: 3.10.0-1062.9.1.el7.x86_64
+app_server_ver: 8.3.18-1334
+postgres_ver: 12.5-3.1C
+nginx_ver: 1.17.9
+zabbix_agent_ver: 5.2-1.el7

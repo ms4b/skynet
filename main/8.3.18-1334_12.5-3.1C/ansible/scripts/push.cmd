@@ -1,0 +1,1 @@
+docker push ms4b/ansible
